@@ -97,14 +97,9 @@ async function firebaseStore() {
     async google() {
       const provider = new fa.GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      try { await fa.signInWithPopup(auth, provider); }
-      catch (e) {
-        // Popups can be blocked in some home-screen apps: fall back to a full-page redirect
-        if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(e.code)) return fa.signInWithRedirect(auth, provider);
-        throw e;
-      }
+      // Popup only: the redirect flow breaks on iPhones when the app isn't hosted on Firebase's own domain
+      await fa.signInWithPopup(auth, provider);
     },
-    redirectResult: () => fa.getRedirectResult(auth),
     signOut: () => fa.signOut(auth),
     start(fn, onErr) {
       return fs.onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
@@ -589,6 +584,7 @@ const submit = {
 
 function friendlyAuth(e) {
   const c = e?.code || '';
+  if (c.includes('popup-blocked') || c.includes('operation-not-supported')) return 'This browser blocked the Google sign-in window. Open the link in Safari or Chrome itself (not inside another app), or use email and password.';
   if (c.includes('popup-closed') || c.includes('cancelled')) return 'Google sign-in was cancelled.';
   if (c.includes('unauthorized-domain')) return 'This web address needs adding to Firebase’s authorised domains (setup step 3.5).';
   if (c.includes('network')) return 'No signal. Signing in needs the internet the first time.';
@@ -644,7 +640,6 @@ async function boot() {
     app.innerHTML = `<div class="card empty"><b>Couldn't start</b>The app needs signal the very first time it opens on a phone, to download what it needs for offline use. Try again with signal.<button class="btn primary" onclick="location.reload()">Try again</button></div>`;
     return;
   }
-  store.redirectResult().catch((e) => renderSignIn(friendlyAuth(e)));
   store.onAuth((user) => {
     if (user) startData();
     else { unsub?.(); unsub = null; S = null; renderSignIn(); }
