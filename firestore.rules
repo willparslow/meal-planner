@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only you two can read or change the meal plan.
+    // Replace these with the two email addresses you'll sign in with.
+    match /households/{household} {
+      allow read, write: if request.auth != null
+        && request.auth.token.email in ['willpar123@gmail.com', 'tcpar309@gmail.com'];
+    }
+  }
+}
