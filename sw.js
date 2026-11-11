@@ -1,7 +1,7 @@
 // Service worker: keeps the app itself available with no signal.
 // Your data's offline storage is handled separately by Firebase.
 // Bump VERSION whenever you change the app files so phones pick up the update.
-const VERSION = 'meal-planner-v5';
+const VERSION = 'meal-planner-v6';
 const SHELL = [
   './', './index.html', './app.js', './styles.css', './seed.js', './firebase-config.js',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
@@ -11,7 +11,8 @@ const FIREBASE_CDN = 'https://www.gstatic.com/firebasejs/';
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const cache = await caches.open(VERSION);
-    await cache.addAll(SHELL);
+    // cache: 'reload' skips the browser's HTTP cache so a new version never caches old files
+    await cache.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })));
     // Pre-fetch the Firebase libraries so the very first offline open works
     try {
       // (service workers can't import modules, so read the version out of the config file's text)

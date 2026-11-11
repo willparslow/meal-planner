@@ -657,7 +657,23 @@ async function boot() {
   });
 }
 
+/* ---------------- updates ----------------
+ * When a new version has been published, the service worker downloads it in the background.
+ * Once it's ready we show a banner with a Reload button (no surprise reloads mid-shop). */
+function showUpdateBanner() {
+  if (document.getElementById('update-banner')) return;
+  const el = document.createElement('div');
+  el.id = 'update-banner';
+  el.innerHTML = '<span><b>Update ready</b>A new version of the app has downloaded.</span><button type="button">Reload</button>';
+  el.querySelector('button').addEventListener('click', () => location.reload());
+  document.body.appendChild(el);
+}
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;   // false on the very first visit: nothing to update
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) showUpdateBanner(); });
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    // Home-screen apps can stay open for days: check for updates whenever the app is brought back to the front
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && navigator.onLine) reg.update().catch(() => {}); });
+  }).catch(() => {});
 }
 boot();
