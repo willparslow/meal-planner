@@ -51,6 +51,10 @@ button { cursor: pointer; }
 /* Plan */
 .day { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--line); }
 .card > .day:first-of-type, .card > h3 + .day { border-top: 0; }
+.daysel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+select.pretty.oneoff { border: 1.5px dashed var(--amber); background-color: #fbf3e4; }
+.once { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--amber); font-weight: 600; padding: 0 4px; }
+.once button { border: 0; background: none; color: var(--green); font-weight: 700; font-size: 13px; padding: 2px 0; }
 .day .dname { width: 40px; font-weight: 700; color: var(--muted); font-size: 14px; }
 .day.today .dname { color: var(--tomato); }
 select.pretty, input.field { flex: 1; min-width: 0; appearance: none; -webkit-appearance: none; background: var(--bg); border: 1px solid transparent; border-radius: 12px; padding: 11px 36px 11px 12px; font-size: 16px; }

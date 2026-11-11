@@ -146,7 +146,7 @@ function normalize(d) {
   d.ingredients ||= {}; d.meals ||= {}; d.weeks ||= {}; d.aisles ||= ['Other'];
   d.shop ||= {}; d.shop.stock ||= {}; d.shop.got ||= {}; d.shop.extras ||= {};
   if (!Object.keys(d.weeks).length) d.weeks['1'] = { days: {}, daily: {} };
-  for (const w of Object.values(d.weeks)) { w.days ||= {}; w.daily ||= {}; }
+  for (const w of Object.values(d.weeks)) { w.days ||= {}; w.daily ||= {}; w.once ||= {}; }
   for (const m of Object.values(d.meals)) m.ings ||= {};
   if (!d.weeks[d.shop.week]) d.shop.week = weekIds(d)[0];
   return d;
@@ -159,11 +159,15 @@ const aisleOrder = () => {
   for (const x of Object.values(S.shop.extras)) if (!order.includes(x.aisle || 'Other')) order.push(x.aisle || 'Other');
   return order;
 };
+const FULL_DAY = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+/** Meal actually planned for a day: a "just this time" change (weeks.N.once) overrides the regular plan (weeks.N.days) */
+function dayMeal(w, d) { const wk = S.weeks[w]; return wk && d in wk.once ? wk.once[d] : wk?.days[d] || ''; }
+const mealName = (id) => (id && S.meals[id]?.name) || 'nothing planned';
 function weekMealIds(w) {
   const wk = S.weeks[w]; if (!wk) return [];
   // Fixed order (Mon→Sun, then every-day meals A–Z): Firestore doesn't keep map keys in a stable order
   const daily = Object.keys(wk.daily).sort((a, b) => (S.meals[a]?.name || '').localeCompare(S.meals[b]?.name || ''));
-  return [...DAYS.map((d) => wk.days[d]).filter(Boolean), ...daily].filter((id) => S.meals[id]);
+  return [...DAYS.map((d) => dayMeal(w, d)).filter(Boolean), ...daily].filter((id) => S.meals[id]);
 }
 function weeksUsing(mealId) {
   return weekIds().filter((w) => weekMealIds(w).includes(mealId));
@@ -262,8 +266,12 @@ function renderPlan() {
       ? `<button class="btn primary" data-action="tab" data-tab="stock">Do the stock check for week ${w} →</button>`
       : `<button class="btn secondary" data-action="shop-week" data-week="${w}">Shop for week ${w} next</button>`}
     <div class="card">
-      ${DAYS.map((d) => `<label class="day ${d === todayName && w === S.shop.week ? 'today' : ''}"><span class="dname">${d}</span>
-        <select class="pretty ${wk.days[d] ? '' : 'empty'}" data-action="set-day" data-week="${w}" data-day="${d}">${opts(wk.days[d])}</select></label>`).join('')}
+      ${DAYS.map((d) => {
+        const once = d in wk.once; const eff = dayMeal(w, d);
+        return `<div class="day ${d === todayName && w === S.shop.week ? 'today' : ''}"><span class="dname">${d}</span>
+        <div class="daysel"><select class="pretty ${eff ? '' : 'empty'} ${once ? 'oneoff' : ''}" data-action="set-day" data-week="${w}" data-day="${d}" aria-label="${FULL_DAY[d]}">${opts(eff)}</select>
+        ${once ? `<div class="once"><span>This time only · usually ${esc(mealName(wk.days[d]))}</span><button type="button" data-action="undo-once" data-week="${w}" data-day="${d}">Undo</button></div>` : ''}</div></div>`;
+      }).join('')}
     </div>
     <div class="card">
       <h3>Every day this week</h3>
@@ -402,6 +410,14 @@ function renderModal() {
       <input type="search" class="search" id="ing-search" placeholder="Find or add an ingredient" autocomplete="off" value="${esc(ui.search)}">
       <div id="ing-picker">${renderPicker(m.id)}</div>
       <button class="btn ghost danger" data-action="del-meal" data-id="${esc(m.id)}">Delete this meal</button>`;
+  } else if (m.type === 'day-change') {
+    const usual = S.weeks[m.w]?.days[m.d] || '';
+    body = `<h2>${FULL_DAY[m.d]}, week ${esc(m.w)}</h2>
+      <p class="lead">${esc(mealName(dayMeal(m.w, m.d)))} → <b style="color:var(--ink)">${esc(mealName(m.to))}</b></p>
+      <button class="btn primary" data-action="day-once">Just this time</button>
+      <p class="note" style="margin:-4px 4px 14px">Goes back to ${esc(mealName(usual))} after you finish the week ${esc(m.w)} shop.</p>
+      <button class="btn secondary" data-action="day-always">Every time week ${esc(m.w)} comes round</button>
+      <button class="btn ghost" data-action="close-modal">Cancel</button>`;
   } else if (m.type === 'new-meal') {
     body = `<form data-action="add-meal"><h2>New meal</h2>
       <input class="search" id="new-meal-name" name="name" placeholder="Meal name, e.g. Lasagne" autocomplete="off" value="${esc(m.name || '')}" enterkeyhint="done">
@@ -500,6 +516,17 @@ const click = {
   },
   'open-meal'(el) { ui.modal = { type: 'meal', id: el.dataset.id }; ui.search = ''; render(); },
   'close-modal'() { closeModal(); },
+  'day-once'() {
+    const { w, d, to } = ui.modal; closeModal();
+    update({ [`weeks.${w}.once.${d}`]: to });
+    toast(`${FULL_DAY[d]}: ${mealName(to)}, just this time`);
+  },
+  'day-always'() {
+    const { w, d, to } = ui.modal; closeModal();
+    update({ [`weeks.${w}.days.${d}`]: to || DEL, [`weeks.${w}.once.${d}`]: DEL });
+    toast(`Week ${w} plan updated`);
+  },
+  'undo-once'(el) { update({ [`weeks.${el.dataset.week}.once.${el.dataset.day}`]: DEL }); },
   'confirm-ok'() { const fn = confirmFn; closeModal(); fn && fn(); },
   'toggle-meal-ing'(el) {
     const mid = ui.modal?.id; if (!mid) return;
@@ -524,6 +551,7 @@ const click = {
       for (const w of weekIds()) {
         for (const [d, mid] of Object.entries(S.weeks[w].days)) if (mid === id) ch[`weeks.${w}.days.${d}`] = DEL;
         if (S.weeks[w].daily[id]) ch[`weeks.${w}.daily.${id}`] = DEL;
+        for (const [d, mid] of Object.entries(S.weeks[w].once)) if (mid === id) ch[`weeks.${w}.once.${d}`] = DEL;
       }
       update(ch);
     });
@@ -555,7 +583,8 @@ const click = {
   'finish-ok'() {
     const next = document.getElementById('next-week').value;
     closeModal();
-    update({ shop: { week: next, stock: {}, got: {}, extras: {} } });
+    const done = S.shop.week;
+    update({ shop: { week: next, stock: {}, got: {}, extras: {} }, [`weeks.${done}.once`]: {} });
     ui.planWeek = next; toast(`Done! Next shop: week ${next}`);
   },
   backup() {
@@ -586,7 +615,13 @@ function moveAisle(i, dir) {
 }
 
 const change = {
-  'set-day'(el) { update({ [`weeks.${el.dataset.week}.days.${el.dataset.day}`]: el.value || DEL }); },
+  'set-day'(el) {
+    const { week: w, day: d } = el.dataset; const to = el.value;
+    const wk = S.weeks[w]; const usual = wk.days[d] || '';
+    if (to === dayMeal(w, d)) return;
+    if (d in wk.once && to === usual) return update({ [`weeks.${w}.once.${d}`]: DEL });   // picked the usual meal again
+    ui.modal = { type: 'day-change', w, d, to }; render();
+  },
   'add-daily'(el) { if (el.value) update({ [`weeks.${el.dataset.week}.daily.${el.value}`]: true }); },
   'rename-meal'(el) { const v = el.value.trim(); if (v && v !== S.meals[el.dataset.id]?.name) update({ [`meals.${el.dataset.id}.name`]: v }); },
   'rename-ing'(el) { const v = el.value.trim(); if (v && v !== S.ingredients[el.dataset.id]?.name) update({ [`ingredients.${el.dataset.id}.name`]: v }); else el.value = S.ingredients[el.dataset.id]?.name || ''; },
