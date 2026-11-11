@@ -135,6 +135,7 @@ input.field:focus, select.pretty:focus { outline: none; border-color: var(--gree
 .sheet-back { position: fixed; inset: 0; background: rgba(30, 28, 22, 0.42); z-index: 30; }
 .sheet-back.anim { animation: fade 0.18s; }
 .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 640px; margin: 0 auto; max-height: 92vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: var(--bg); border-radius: 22px 22px 0 0; padding: 8px 16px calc(20px + var(--safe-b)); z-index: 31; }
+.sheet.tall { top: calc(var(--safe-t) + 10px); max-height: none; }
 .sheet.anim { animation: up 0.22s ease-out; }
 .sheet .grab { width: 40px; height: 5px; background: #d8d0c2; border-radius: 9px; margin: 2px auto 10px; }
 .sheet-head { display: flex; gap: 10px; align-items: center; position: sticky; top: -8px; background: var(--bg); padding: 6px 0 10px; z-index: 2; }

@@ -204,7 +204,7 @@ function render() {
 
   if (keep) {
     const el = document.getElementById(keep.id);
-    if (el) { el.value = keep.value; el.focus({ preventScroll: true }); try { el.setSelectionRange(keep.s, keep.e); } catch {} }
+    if (el) { if (keep.id !== 'ing-search') el.value = keep.value; el.focus({ preventScroll: true }); try { el.setSelectionRange(keep.s, keep.e); } catch {} }
   }
   const sheet = app.querySelector('.sheet');
   if (sheet && sheetScroll != null) sheet.scrollTop = sheetScroll;
@@ -379,7 +379,7 @@ function renderModal() {
       <button class="btn ghost" data-action="close-modal">Not yet</button>`;
   }
   const fresh = renderModal.last !== m; renderModal.last = m;   // animate only when first opened
-  return `<div class="sheet-back ${fresh ? 'anim' : ''}" data-action="close-modal"></div><div class="sheet ${fresh ? 'anim' : ''}" role="dialog" aria-modal="true"><div class="grab"></div>${body}</div>`;
+  return `<div class="sheet-back ${fresh ? 'anim' : ''}" data-action="close-modal"></div><div class="sheet ${fresh ? 'anim' : ''} ${m.type === 'meal' ? 'tall' : ''}" role="dialog" aria-modal="true"><div class="grab"></div>${body}</div>`;
 }
 
 function renderPicker(mealId) {
@@ -388,11 +388,11 @@ function renderPicker(mealId) {
   const all = Object.entries(S.ingredients).map(([id, i]) => ({ id, name: i.name, aisle: i.aisle || 'Other' }));
   const hits = q ? all.filter((i) => i.name.toLowerCase().includes(q)) : all;
   const exact = all.some((i) => i.name.toLowerCase() === q);
-  const add = q && !exact ? `<div class="card newing"><span class="main" style="flex:1;min-width:0"><b>Add “${esc(ui.search.trim())}”</b></span>
+  const add = q && !exact ? `<p class="note" style="margin:4px 4px 6px">${hits.length ? 'Not what you meant?' : 'Not on your list yet.'}</p><div class="card newing"><span class="main" style="flex:1;min-width:0"><b>New: “${esc(ui.search.trim())}”</b></span>
       ${aisleSelect('new-meal-ing-aisle', 'Other', '', 'style="flex:0 0 120px"')}<button data-action="add-ing-to-meal" data-id="${esc(mealId)}">Add</button></div>` : '';
-  return add + groupByAisle(hits).map(([aisle, list]) => `<div class="card"><h3>${esc(aisle)}</h3>
+  return groupByAisle(hits).map(([aisle, list]) => `<div class="card"><h3>${esc(aisle)}</h3>
     ${list.map((i) => { const on = !!meal.ings[i.id]; return `<button class="row pick ${on ? 'on' : ''}" data-action="toggle-meal-ing" data-id="${esc(i.id)}" aria-pressed="${on}"><span class="box">${tick}</span><span class="main"><span class="name">${esc(i.name)}</span></span></button>`; }).join('')}
-  </div>`).join('');
+  </div>`).join('') + add;
 }
 
 function renderSignIn(msg = '', mode = 'in') {
@@ -456,7 +456,10 @@ const click = {
   'toggle-meal-ing'(el) {
     const mid = ui.modal?.id; if (!mid) return;
     const on = !!S.meals[mid].ings[el.dataset.id];
+    const fromSearch = !!ui.search && el.closest('#ing-picker');
+    if (fromSearch) ui.search = '';
     update({ [`meals.${mid}.ings.${el.dataset.id}`]: on ? DEL : true });
+    if (fromSearch) { render(); if (!on) toast(`${S.ingredients[el.dataset.id]?.name} ticked`); }
   },
   'add-ing-to-meal'(el) {
     const name = ui.search.trim(); if (!name) return;
@@ -621,6 +624,12 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.matches('input[data-action^="rename"]')) e.target.blur();
   if (e.key === 'Escape' && ui.modal) closeModal();
+  if (e.key === 'Enter' && e.target.id === 'ing-search' && ui.modal?.type === 'meal') {
+    e.preventDefault();
+    const rows = document.querySelectorAll('#ing-picker [data-action=toggle-meal-ing]');
+    if (rows.length === 1) click['toggle-meal-ing'](rows[0]);
+    else if (!rows.length && ui.search.trim()) click['add-ing-to-meal'](document.querySelector('[data-action=add-ing-to-meal]'));
+  }
 });
 addEventListener('online', () => S && render());
 addEventListener('offline', () => S && render());
