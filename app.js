@@ -237,6 +237,9 @@ function renderPlan() {
       ${weeks.map((id) => `<button class="${id === w ? 'on' : ''}" data-action="plan-week" data-week="${id}">Week ${id}${id === S.shop.week ? '<span class="dot" title="Current shop"></span>' : ''}</button>`).join('')}
       <button data-action="add-week" aria-label="Add a week">+ Week</button>
     </div>
+    ${w === S.shop.week
+      ? `<button class="btn primary" data-action="tab" data-tab="stock">Do the stock check for week ${w} →</button>`
+      : `<button class="btn secondary" data-action="shop-week" data-week="${w}">Shop for week ${w} next</button>`}
     <div class="card">
       ${DAYS.map((d) => `<label class="day ${d === todayName && w === S.shop.week ? 'today' : ''}"><span class="dname">${d}</span>
         <select class="pretty ${wk.days[d] ? '' : 'empty'}" data-action="set-day" data-week="${w}" data-day="${d}">${opts(wk.days[d])}</select></label>`).join('')}
@@ -248,9 +251,6 @@ function renderPlan() {
         <span class="chip add">+ Add<select data-action="add-daily" data-week="${w}" aria-label="Add an every-day meal"><option value="">Add</option>${meals.filter((m) => !wk.daily[m.id]).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select></span>
       </div>
     </div>
-    ${w === S.shop.week
-      ? `<button class="btn primary" data-action="tab" data-tab="stock">Do the stock check for week ${w} →</button>`
-      : `<button class="btn primary" data-action="shop-week" data-week="${w}">Shop for week ${w} next</button>`}
     ${weeks.length > 1 ? `<button class="btn ghost danger" data-action="del-week" data-week="${w}">Delete week ${w}</button>` : ''}`;
 }
 
