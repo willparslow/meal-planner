@@ -79,7 +79,9 @@ async function firebaseStore() {
   ]);
   const fapp = fbApp.initializeApp(firebaseConfig);
   const db = fs.initializeFirestore(fapp, {
-    localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }),
+    // Single-tab mode with forced ownership: the open app always owns the offline cache and sends its own
+    // changes. (Multi-tab mode can leave writes queued behind a stale, suspended copy of the page on iPhone.)
+    localCache: fs.persistentLocalCache({ tabManager: fs.persistentSingleTabManager({ forceOwnership: true }) }),
   });
   const auth = fa.getAuth(fapp);
   const ref = fs.doc(db, 'households', 'home');
@@ -655,7 +657,7 @@ addEventListener('offline', () => S && render());
 /* ---------------- boot ---------------- */
 function startData() {
   unsub?.();
-  unsub = store.start((data, m) => { meta = m; S = data ? normalize(data) : null; render(); },
+  unsub = store.start((data, m) => { meta = m; if (!m.pending && !m.fromCache) saveError = null; S = data ? normalize(data) : null; render(); },
     (err) => { app.innerHTML = `<div class="card empty"><b>Can't open the plan</b>${esc(err.code === 'permission-denied' ? 'This account isn\'t on the allowed list. Check the email addresses in your Firestore rules.' : err.message)}<button class="btn secondary" data-action="sign-out-now">Sign out</button></div>`; });
 }
 click['sign-out-now'] = () => store.signOut();
