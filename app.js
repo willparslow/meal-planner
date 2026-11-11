@@ -141,7 +141,9 @@ const aisleOrder = () => {
 };
 function weekMealIds(w) {
   const wk = S.weeks[w]; if (!wk) return [];
-  return [...Object.values(wk.days), ...Object.keys(wk.daily)].filter((id) => S.meals[id]);
+  // Fixed order (Mon→Sun, then every-day meals A–Z): Firestore doesn't keep map keys in a stable order
+  const daily = Object.keys(wk.daily).sort((a, b) => (S.meals[a]?.name || '').localeCompare(S.meals[b]?.name || ''));
+  return [...DAYS.map((d) => wk.days[d]).filter(Boolean), ...daily].filter((id) => S.meals[id]);
 }
 function weeksUsing(mealId) {
   return weekIds().filter((w) => weekMealIds(w).includes(mealId));
