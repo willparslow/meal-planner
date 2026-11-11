@@ -34,6 +34,7 @@ button { cursor: pointer; }
 .sync { flex: none; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 99px; background: var(--green-soft); color: var(--green); white-space: nowrap; margin-top: 4px; }
 .sync.offline { background: #f3ead8; color: var(--amber); }
 .sync.pending { background: #eceae4; color: var(--muted); }
+.sync.error { background: var(--tomato-soft); color: var(--tomato); white-space: normal; max-width: 50%; text-align: right; }
 .sync.demo { background: #ece6f5; color: #5b4a86; }
 
 /* Cards and rows */

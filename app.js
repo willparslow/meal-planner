@@ -19,6 +19,7 @@ let S = null;            // current household data
 let meta = {};           // { fromCache, pending, exists }
 let unsub = null;
 let confirmFn = null;
+let saveError = null;   // shown in the header if the server rejects a change
 
 const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
@@ -106,10 +107,26 @@ async function firebaseStore() {
         fn(snap.exists() ? snap.data() : null, { exists: snap.exists(), fromCache: snap.metadata.fromCache, pending: snap.metadata.hasPendingWrites });
       }, onErr);
     },
-    seed(empty) { return fs.setDoc(ref, empty ? emptyData() : structuredClone(SEED)); },
+    // Never overwrite an existing plan: check the server first, and create the document only if it isn't there
+    async seed(empty) {
+      try {
+        await fs.runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          if (snap.exists()) throw Object.assign(new Error('exists'), { code: 'already-exists' });
+          tx.set(ref, empty ? emptyData() : structuredClone(SEED));
+        });
+      } catch (e) {
+        toast(e.code === 'already-exists' ? 'Your plan already exists. Loading it…' : `Couldn't import: ${e.code || e.message}`);
+      }
+    },
     replace(d) { return fs.setDoc(ref, d); },
     // Not awaited: when offline, Firestore applies the change locally at once and queues it.
-    update(changes) { fs.updateDoc(ref, toFs(changes)).catch((e) => toast(`Couldn't save: ${e.code || e.message}`)); },
+    update(changes) {
+      fs.updateDoc(ref, toFs(changes)).catch((e) => {
+        console.error('Save failed', e);
+        saveError = e.code || e.message; render();
+      });
+    },
   };
 }
 
@@ -180,6 +197,7 @@ function groupByAisle(items) {
 /* ---------------- render ---------------- */
 function syncBadge() {
   if (store?.kind === 'demo') return '<span class="sync demo">Demo · this phone only</span>';
+  if (saveError) return `<span class="sync error" title="${esc(saveError)}">Not saved: ${esc(saveError.replace('permission-denied', 'no permission'))}</span>`;
   if (!navigator.onLine) return '<span class="sync offline">Offline · saved on phone</span>';
   if (meta.pending) return '<span class="sync pending">Syncing…</span>';
   if (meta.fromCache) return '<span class="sync offline">Saved on phone</span>';
