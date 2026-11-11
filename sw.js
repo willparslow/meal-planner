@@ -1,7 +1,7 @@
 // Service worker: keeps the app itself available with no signal.
 // Your data's offline storage is handled separately by Firebase.
 // Bump VERSION whenever you change the app files so phones pick up the update.
-const VERSION = 'meal-planner-v8';
+const VERSION = 'meal-planner-v9';
 const SHELL = [
   './', './index.html', './app.js', './styles.css', './seed.js', './firebase-config.js',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',

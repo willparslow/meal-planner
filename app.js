@@ -124,7 +124,7 @@ async function firebaseStore() {
     replace(d) { return fs.setDoc(ref, d); },
     // Not awaited: when offline, Firestore applies the change locally at once and queues it.
     update(changes) {
-      fs.updateDoc(ref, toFs(changes)).catch((e) => {
+      fs.updateDoc(ref, toFs(changes)).then(() => { if (saveError) { saveError = null; render(); } }).catch((e) => {
         console.error('Save failed', e);
         saveError = e.code || e.message; render();
       });
@@ -657,7 +657,7 @@ addEventListener('offline', () => S && render());
 /* ---------------- boot ---------------- */
 function startData() {
   unsub?.();
-  unsub = store.start((data, m) => { meta = m; if (!m.pending && !m.fromCache) saveError = null; S = data ? normalize(data) : null; render(); },
+  unsub = store.start((data, m) => { meta = m; S = data ? normalize(data) : null; render(); },
     (err) => { app.innerHTML = `<div class="card empty"><b>Can't open the plan</b>${esc(err.code === 'permission-denied' ? 'This account isn\'t on the allowed list. Check the email addresses in your Firestore rules.' : err.message)}<button class="btn secondary" data-action="sign-out-now">Sign out</button></div>`; });
 }
 click['sign-out-now'] = () => store.signOut();
