@@ -29,6 +29,7 @@ const ui = {
   mealsTab: 'meals',
   modal: null,           // { type: 'meal', id } | { type: 'confirm', ... } | { type: 'finish' }
   search: '',
+  mealSearch: '',
   hideGot: ls.get('mp.hideGot') === '1',
 };
 
@@ -224,7 +225,7 @@ function render() {
 
   if (keep) {
     const el = document.getElementById(keep.id);
-    if (el) { if (keep.id !== 'ing-search') el.value = keep.value; el.focus({ preventScroll: true }); try { el.setSelectionRange(keep.s, keep.e); } catch {} }
+    if (el) { if (!['ing-search', 'meal-search'].includes(keep.id)) el.value = keep.value; el.focus({ preventScroll: true }); try { el.setSelectionRange(keep.s, keep.e); } catch {} }
   }
   const sheet = app.querySelector('.sheet');
   if (sheet && sheetScroll != null) sheet.scrollTop = sheetScroll;
@@ -282,15 +283,30 @@ function renderMeals() {
   if (ui.mealsTab === 'settings') return header('Settings', 'Aisle order matches your walk round the shop') + seg + renderSettings();
   const meals = mealList();
   return `${header('Meals', `${meals.length} meals`)}${seg}
-    <form class="addbar" data-action="add-meal"><input id="new-meal" name="name" placeholder="New meal name" autocomplete="off"><button>Add</button></form>
-    <div class="card">
-      ${meals.length ? meals.map((m) => {
-        const n = Object.keys(m.ings).filter((i) => S.ingredients[i]).length;
-        const ws = weeksUsing(m.id);
-        return `<button class="row" data-action="open-meal" data-id="${esc(m.id)}"><span class="main"><span class="name">${esc(m.name)}</span>
-          <span class="sub">${n} ingredient${n === 1 ? '' : 's'}${ws.length ? ` · week ${ws.join(', ')}` : ' · not planned'}</span></span><span class="chev">›</span></button>`;
-      }).join('') : '<div class="empty">No meals yet. Add one above.</div>'}
-    </div>`;
+    <div class="addbar">
+      <input type="search" id="meal-search" placeholder="Search meals or ingredients" autocomplete="off" value="${esc(ui.mealSearch)}">
+      <button type="button" data-action="new-meal" style="background:var(--green)">+ New</button>
+    </div>
+    <div id="meal-list">${renderMealList()}</div>`;
+}
+
+function renderMealList() {
+  const q = ui.mealSearch.trim().toLowerCase();
+  const all = mealList();
+  const rows = all.map((m) => {
+    const ings = Object.keys(m.ings).filter((i) => S.ingredients[i]).map((i) => S.ingredients[i].name);
+    const byIng = q && !m.name.toLowerCase().includes(q) ? ings.filter((n) => n.toLowerCase().includes(q)) : [];
+    return { ...m, n: ings.length, byIng, hit: !q || m.name.toLowerCase().includes(q) || byIng.length };
+  }).filter((m) => m.hit);
+  const list = rows.length ? `<div class="card">${rows.map((m) => {
+    const ws = weeksUsing(m.id);
+    const sub = m.byIng.length ? `uses ${m.byIng.join(', ')}` : `${m.n} ingredient${m.n === 1 ? '' : 's'}${ws.length ? ` · week ${ws.join(', ')}` : ' · not planned'}`;
+    return `<button class="row" data-action="open-meal" data-id="${esc(m.id)}"><span class="main"><span class="name">${esc(m.name)}</span>
+      <span class="sub">${esc(sub)}</span></span><span class="chev">›</span></button>`;
+  }).join('')}</div>` : '';
+  if (!all.length) return '<div class="card empty">No meals yet. Tap <b style="display:inline;font-size:inherit">+ New</b> to add one.</div>';
+  if (!rows.length) return `<div class="card empty"><b>No meals match “${esc(ui.mealSearch.trim())}”</b><button class="btn secondary" data-action="new-meal">Create “${esc(ui.mealSearch.trim())}” as a new meal</button></div>`;
+  return list;
 }
 
 const aisleSelect = (id, sel, action, extra = '') => `<select class="pretty" id="${id}" ${action ? `data-action="${action}"` : ''} ${extra}>${aisleOrder().map((a) => `<option ${a === sel ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>`;
@@ -386,6 +402,11 @@ function renderModal() {
       <input type="search" class="search" id="ing-search" placeholder="Find or add an ingredient" autocomplete="off" value="${esc(ui.search)}">
       <div id="ing-picker">${renderPicker(m.id)}</div>
       <button class="btn ghost danger" data-action="del-meal" data-id="${esc(m.id)}">Delete this meal</button>`;
+  } else if (m.type === 'new-meal') {
+    body = `<form data-action="add-meal"><h2>New meal</h2>
+      <input class="search" id="new-meal-name" name="name" placeholder="Meal name, e.g. Lasagne" autocomplete="off" value="${esc(m.name || '')}" enterkeyhint="done">
+      <button class="btn primary">Create and add ingredients</button>
+      <button type="button" class="btn ghost" data-action="close-modal">Cancel</button></form>`;
   } else if (m.type === 'confirm') {
     body = `<h2>${esc(m.title)}</h2><p class="lead">${esc(m.text)}</p>
       <button class="btn primary ${m.danger ? 'danger-bg' : ''}" data-action="confirm-ok" ${m.danger ? 'style="background:var(--tomato)"' : ''}>${esc(m.ok)}</button>
@@ -470,6 +491,13 @@ const click = {
     } else go();
   },
   'meals-tab'(el) { ui.mealsTab = el.dataset.k; render(); },
+  'new-meal'() {
+    const q = ui.mealSearch.trim();
+    const matches = q && mealList().some((m) => m.name.toLowerCase().includes(q.toLowerCase()));
+    ui.modal = { type: 'new-meal', name: matches ? '' : q.charAt(0).toUpperCase() + q.slice(1) }; render();
+    const input = document.getElementById('new-meal-name');   // focus inside the tap so the iPhone keyboard opens
+    input?.focus(); input?.setSelectionRange(input.value.length, input.value.length);
+  },
   'open-meal'(el) { ui.modal = { type: 'meal', id: el.dataset.id }; ui.search = ''; render(); },
   'close-modal'() { closeModal(); },
   'confirm-ok'() { const fn = confirmFn; closeModal(); fn && fn(); },
@@ -576,10 +604,12 @@ const change = {
 const submit = {
   'add-meal'(form) {
     const name = form.name.value.trim(); if (!name) return;
+    const existing = mealList().find((m) => m.name.toLowerCase() === name.toLowerCase());
+    ui.mealSearch = ''; ui.search = '';
+    if (existing) { ui.modal = { type: 'meal', id: existing.id }; render(); return toast(`${existing.name} already exists`); }
     const id = uniqueId(slug(name), S.meals);
-    form.name.value = '';
     update({ [`meals.${id}`]: { name, ings: {} } });
-    ui.modal = { type: 'meal', id }; ui.search = ''; render();
+    ui.modal = { type: 'meal', id }; render();
   },
   'add-ing'(form) {
     const name = form.name.value.trim(); if (!name) return;
@@ -635,6 +665,11 @@ document.addEventListener('submit', (e) => {
   e.preventDefault(); submit[form.dataset.action]?.(form);
 });
 document.addEventListener('input', (e) => {
+  if (e.target.id === 'meal-search') {
+    ui.mealSearch = e.target.value;
+    const box = document.getElementById('meal-list');
+    if (box) box.innerHTML = renderMealList();
+  }
   if (e.target.id === 'ing-search') {
     ui.search = e.target.value;
     const box = document.getElementById('ing-picker');
@@ -644,6 +679,7 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.matches('input[data-action^="rename"]')) e.target.blur();
   if (e.key === 'Escape' && ui.modal) closeModal();
+  if (e.key === 'Enter' && e.target.id === 'meal-search') e.target.blur();
   if (e.key === 'Enter' && e.target.id === 'ing-search' && ui.modal?.type === 'meal') {
     e.preventDefault();
     const rows = document.querySelectorAll('#ing-picker [data-action=toggle-meal-ing]');
